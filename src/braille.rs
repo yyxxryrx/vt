@@ -51,16 +51,14 @@ impl BrailleEncoder {
                     }
                 }
 
-                let r_avg = r_sum.checked_div(count);
-                let g_avg = g_sum.checked_div(count);
-                let b_avg = b_sum.checked_div(count);
-                if let (Some(r), Some(g), Some(b)) = (r_avg, g_avg, b_avg) {
-                    let _ = write!(
-                        buf,
-                        "\x1b[38;2;{};{};{}m\u{28ff}",
-                        r as u8, g as u8, b as u8
-                    );
-                }
+                let r_avg = r_sum / count;
+                let g_avg = g_sum / count;
+                let b_avg = b_sum / count;
+                let _ = write!(
+                    buf,
+                    "\x1b[38;2;{};{};{}m\u{28ff}",
+                    r_avg as u8, g_avg as u8, b_avg as u8
+                );
             }
             buf.push_str("\x1b[0m");
             writer.write_all(buf.as_bytes())?;

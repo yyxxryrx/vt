@@ -1,10 +1,6 @@
-use crate::ascii::AsciiEncoder;
-use crate::braille::BrailleEncoder;
+use crate::encoder::Encoder;
 use crate::error::Result;
-use crate::halfblock::HalfBlockEncoder;
-use crate::kitty::KittyEncoder;
 use crate::protocol::ImageProtocol;
-use crate::sixel::SixelEncoder;
 use crate::terminal::{CursorGuard, clear_screen, hide_cursor};
 use crate::video::VideoDecoder;
 use sixel_rs::optflags::{DiffusionMethod, Quality};
@@ -40,11 +36,7 @@ const PREVIEW_MAX_SECS: f64 = 5.0;
 
 pub struct Player {
     decoder: VideoDecoder,
-    sixel_enc: Option<SixelEncoder>,
-    kitty_enc: Option<KittyEncoder>,
-    halfblock_enc: Option<HalfBlockEncoder>,
-    braille_enc: Option<BrailleEncoder>,
-    ascii_enc: Option<AsciiEncoder>,
+    encoder: Option<Encoder>,
     target_width: u32,
     target_height: u32,
     frame_duration: f64,
@@ -62,39 +54,12 @@ impl Player {
         let mut decoder = VideoDecoder::new(stream)?;
         decoder.set_scaling(config.target_width, config.target_height)?;
 
-        let sixel_enc = if config.protocol == ImageProtocol::Sixel {
-            Some(SixelEncoder::new(
-                config.colors,
-                config.diffusion,
-                config.quality,
-            )?)
-        } else {
-            None
-        };
-
-        let kitty_enc = if config.protocol == ImageProtocol::Kitty {
-            Some(KittyEncoder::new())
-        } else {
-            None
-        };
-
-        let halfblock_enc = if config.protocol == ImageProtocol::HalfBlock {
-            Some(HalfBlockEncoder::new())
-        } else {
-            None
-        };
-
-        let braille_enc = if config.protocol == ImageProtocol::Braille {
-            Some(BrailleEncoder::new())
-        } else {
-            None
-        };
-
-        let ascii_enc = if config.protocol == ImageProtocol::Ascii {
-            Some(AsciiEncoder::new())
-        } else {
-            None
-        };
+        let encoder = Some(Encoder::new(
+            config.protocol,
+            config.colors,
+            config.diffusion,
+            config.quality,
+        )?);
 
         let fps = {
             let r = stream.avg_frame_rate();
@@ -114,11 +79,7 @@ impl Player {
 
         Ok(Self {
             decoder,
-            sixel_enc,
-            kitty_enc,
-            halfblock_enc,
-            braille_enc,
-            ascii_enc,
+            encoder,
             target_width: config.target_width,
             target_height: config.target_height,
             frame_duration,
@@ -140,10 +101,11 @@ impl Player {
         running: Arc<AtomicBool>,
     ) -> Result<()> {
         let _cursor_guard = CursorGuard;
-        let stdout = std::io::stdout();
-        let mut stdout_lock = stdout.lock();
-        clear_screen(&mut stdout_lock)?;
-        hide_cursor(&mut stdout_lock)?;
+        {
+            let mut lock = std::io::stdout().lock();
+            clear_screen(&mut lock)?;
+            hide_cursor(&mut lock)?;
+        }
 
         let (center_x, center_y) = crate::terminal::compute_center_offset(
             self.target_width,
@@ -250,68 +212,14 @@ impl Player {
                 }
                 last_frame_time = Instant::now();
 
-                match self.protocol {
-                    ImageProtocol::Sixel => {
-                        if let Some(enc) = self.sixel_enc.as_mut() {
-                            write!(stdout_lock, "\x1b[{};{}H", center_y + 1, center_x + 1)?;
-                            stdout_lock.flush()?;
-                            drop(stdout_lock);
-                            enc.encode_frame(
-                                self.target_width as usize,
-                                self.target_height as usize,
-                                &self.rgb_buffer,
-                            )?;
-                            stdout_lock = std::io::stdout().lock();
-                        }
-                    }
-                    ImageProtocol::Kitty => {
-                        if let Some(enc) = self.kitty_enc.as_mut() {
-                            enc.encode_frame(
-                                &mut stdout_lock,
-                                self.target_width as usize,
-                                self.target_height as usize,
-                                &self.rgb_buffer,
-                                center_x,
-                                center_y,
-                            )?;
-                        }
-                    }
-                    ImageProtocol::HalfBlock => {
-                        if let Some(enc) = self.halfblock_enc.as_mut() {
-                            enc.encode_frame(
-                                &mut stdout_lock,
-                                self.target_width as usize,
-                                self.target_height as usize,
-                                &self.rgb_buffer,
-                                center_x,
-                                center_y,
-                            )?;
-                        }
-                    }
-                    ImageProtocol::Braille => {
-                        if let Some(enc) = self.braille_enc.as_mut() {
-                            enc.encode_frame(
-                                &mut stdout_lock,
-                                self.target_width as usize,
-                                self.target_height as usize,
-                                &self.rgb_buffer,
-                                center_x,
-                                center_y,
-                            )?;
-                        }
-                    }
-                    ImageProtocol::Ascii => {
-                        if let Some(enc) = self.ascii_enc.as_mut() {
-                            enc.encode_frame(
-                                &mut stdout_lock,
-                                self.target_width as usize,
-                                self.target_height as usize,
-                                &self.rgb_buffer,
-                                center_x,
-                                center_y,
-                            )?;
-                        }
-                    }
+                if let Some(ref mut enc) = self.encoder {
+                    enc.encode_frame(
+                        self.target_width as usize,
+                        self.target_height as usize,
+                        &self.rgb_buffer,
+                        center_x,
+                        center_y,
+                    )?;
                 }
 
                 frame_count += 1;
@@ -330,24 +238,15 @@ impl Player {
                     0.0
                 };
 
-                if self.verbose {
-                    let (protocol_name, diffusion_name) = match self.protocol {
-                        ImageProtocol::Sixel => {
-                            ("sixel", self.sixel_enc.as_ref().unwrap().diffusion_name())
-                        }
-                        ImageProtocol::Kitty => ("kitty", "none"),
-                        ImageProtocol::HalfBlock => ("halfblock", "none"),
-                        ImageProtocol::Braille => ("braille", "none"),
-                        ImageProtocol::Ascii => ("ascii", "none"),
-                    };
-                    let status_row = match self.protocol {
-                        ImageProtocol::HalfBlock => self.target_height / 2 + 2,
-                        ImageProtocol::Braille => self.target_height / 4 + 2,
-                        ImageProtocol::Ascii => self.target_height + 2,
-                        _ => self.target_height + 2,
-                    };
+                if self.verbose
+                    && let Some(ref enc) = self.encoder
+                {
+                    let protocol_name = enc.protocol_name();
+                    let diffusion_name = enc.diffusion_name();
+                    let status_row = enc.status_row(self.target_height);
+                    let mut lock = std::io::stdout().lock();
                     write!(
-                        stdout_lock,
+                        lock,
                         "\x1b[{};1H\x1b[1mFPS:{:.1} F:{} T:{:.1}s {}x{} C:{} P:{} d:{}\x1b[0m\r",
                         status_row,
                         fps,
@@ -359,8 +258,8 @@ impl Player {
                         protocol_name,
                         diffusion_name,
                     )?;
+                    lock.flush()?;
                 }
-                stdout_lock.flush()?;
             }
         }
 

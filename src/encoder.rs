@@ -23,11 +23,7 @@ impl Encoder {
         quality: Quality,
     ) -> crate::error::Result<Self> {
         match protocol {
-            ImageProtocol::Sixel => Ok(Self::Sixel(SixelEncoder::new(
-                colors,
-                diffusion,
-                quality,
-            )?)),
+            ImageProtocol::Sixel => Ok(Self::Sixel(SixelEncoder::new(colors, diffusion, quality)?)),
             ImageProtocol::Kitty => Ok(Self::Kitty(KittyEncoder::new())),
             ImageProtocol::HalfBlock => Ok(Self::HalfBlock(HalfBlockEncoder::new())),
             ImageProtocol::Braille => Ok(Self::Braille(BrailleEncoder::new())),

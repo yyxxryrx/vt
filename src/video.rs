@@ -108,7 +108,9 @@ impl VideoDecoder {
                 Ok(()) => break,
                 Err(ffmpeg::Error::Other { errno }) if errno == ffmpeg::error::EAGAIN => {
                     if self.decoder.receive_frame(&mut self.decoded_frame).is_ok() {
-                        self.scaler.as_mut().unwrap()
+                        self.scaler
+                            .as_mut()
+                            .unwrap()
                             .run(&self.decoded_frame, &mut self.rgb_frame)
                             .map_err(|e| Error::Ffmpeg(e.to_string()))?;
                         self.copy_frame(output_buffer);
@@ -121,7 +123,9 @@ impl VideoDecoder {
 
         if !drained {
             if let Ok(()) = self.decoder.receive_frame(&mut self.decoded_frame) {
-                self.scaler.as_mut().unwrap()
+                self.scaler
+                    .as_mut()
+                    .unwrap()
                     .run(&self.decoded_frame, &mut self.rgb_frame)
                     .map_err(|e| Error::Ffmpeg(e.to_string()))?;
                 self.copy_frame(output_buffer);

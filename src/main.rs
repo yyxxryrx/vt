@@ -23,7 +23,6 @@ fn main() -> Result<()> {
         None => {
             let mut cmd = args::Cli::command();
             cmd.print_help()?;
-            println!();
             return Ok(());
         }
     };

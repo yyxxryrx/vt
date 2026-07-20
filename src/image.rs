@@ -2,7 +2,9 @@ use crate::args;
 use crate::encoder::Encoder;
 use crate::error::Result;
 use crate::protocol::ImageProtocol;
-use crate::terminal::{CursorGuard, clear_screen, hide_cursor, compute_center_offset, fit_dimensions};
+use crate::terminal::{
+    CursorGuard, clear_screen, compute_center_offset, fit_dimensions, hide_cursor,
+};
 
 pub fn load_image(path: &str) -> Result<(image::DynamicImage, u32, u32)> {
     let img = image::open(path)?;

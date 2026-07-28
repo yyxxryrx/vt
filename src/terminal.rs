@@ -22,6 +22,12 @@ pub fn is_fzf_preview() -> bool {
     std::env::var("FZF_PREVIEW").is_ok() || std::env::var("FZF_PREVIEW_LINES").is_ok()
 }
 
+pub fn terminal_size() -> (u32, u32) {
+    terminal_size::terminal_size()
+        .map(|(w, h)| (w.0 as u32, h.0 as u32))
+        .unwrap_or((80, 24))
+}
+
 pub fn cell_size() -> (u32, u32) {
     #[cfg(unix)]
     {
@@ -57,10 +63,7 @@ pub fn fit_dimensions(
     let (phys_bounds_w, phys_bounds_h) = if let Some((cw, ch)) = size {
         (cw * cell_w, ch * cell_h)
     } else {
-        let (cols, rows) = terminal_size::terminal_size()
-            .map(|(w, h)| (w.0 as u32, h.0 as u32))
-            .unwrap_or((80, 24));
-
+        let (cols, rows) = terminal_size();
         let max_phys_w = cols * cell_w;
         let max_phys_h = rows.saturating_sub(2) * cell_h;
 
@@ -92,9 +95,7 @@ pub fn compute_center_offset(
         return (0, 0);
     }
 
-    let (cols, rows) = terminal_size::terminal_size()
-        .map(|(w, h)| (w.0 as u32, h.0 as u32))
-        .unwrap_or((80, 24));
+    let (cols, rows) = terminal_size();
 
     match protocol {
         ImageProtocol::Sixel | ImageProtocol::Kitty => {
@@ -127,4 +128,31 @@ pub fn compute_center_offset(
             (cx, cy)
         }
     }
+}
+
+pub fn clear_image(
+    protocol: ImageProtocol,
+    pixel_w: u32,
+    pixel_h: u32,
+    x: u32,
+    y: u32,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    match protocol {
+        ImageProtocol::Kitty => {
+            write!(writer, "\x1b_Ga=d,i=1\x1b\\")?;
+        }
+        ImageProtocol::Sixel => {
+            write!(
+                writer,
+                "\x1b[{};{}H\x1bP0;1;q\"1;1;{};{}\x1b\\",
+                y + 1,
+                x + 1,
+                pixel_w,
+                pixel_h
+            )?;
+        }
+        _ => {}
+    }
+    Ok(())
 }

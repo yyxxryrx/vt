@@ -3,10 +3,9 @@ use crate::error::Result;
 use crate::protocol::ImageProtocol;
 use crate::terminal::{CursorGuard, clear_screen, hide_cursor};
 use crate::video::VideoDecoder;
-use sixel_rs::optflags::{DiffusionMethod, Quality};
 
 use ffmpeg_next as ffmpeg;
-use std::io::Write;
+use std::io::{self, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -25,11 +24,13 @@ pub struct PlayerConfig {
     pub target_height: u32,
     pub protocol: ImageProtocol,
     pub colors: u8,
-    pub diffusion: DiffusionMethod,
-    pub quality: Quality,
     pub verbose: bool,
     pub preview_mode: bool,
     pub center: bool,
+    #[cfg(feature = "sixel-rs")]
+    pub diffusion: String,
+    #[cfg(feature = "sixel-rs")]
+    pub quality: String,
 }
 
 const PREVIEW_MAX_SECS: f64 = 5.0;
@@ -54,12 +55,20 @@ impl Player {
         let mut decoder = VideoDecoder::new(stream)?;
         decoder.set_scaling(config.target_width, config.target_height)?;
 
-        let encoder = Some(Encoder::new(
-            config.protocol,
-            config.colors,
-            config.diffusion,
-            config.quality,
-        )?);
+        let encoder = {
+            #[cfg(feature = "sixel-rs")]
+            if config.protocol == ImageProtocol::Sixel {
+                let diffusion = crate::sixel_rs::diffusion_from_str(&config.diffusion)
+                    .unwrap_or(sixel_rs::optflags::DiffusionMethod::Auto);
+                let quality = crate::sixel_rs::quality_from_str(&config.quality)
+                    .unwrap_or(sixel_rs::optflags::Quality::Auto);
+                Some(Encoder::new_sixel_rs(config.colors, diffusion, quality)?)
+            } else {
+                Some(Encoder::new(config.protocol, config.colors)?)
+            }
+            #[cfg(not(feature = "sixel-rs"))]
+            Some(Encoder::new(config.protocol, config.colors)?)
+        };
 
         let fps = {
             let r = stream.avg_frame_rate();
@@ -102,7 +111,7 @@ impl Player {
     ) -> Result<()> {
         let _cursor_guard = CursorGuard;
         {
-            let mut lock = std::io::stdout().lock();
+            let mut lock = io::stdout().lock();
             clear_screen(&mut lock)?;
             hide_cursor(&mut lock)?;
         }
@@ -213,12 +222,13 @@ impl Player {
                 last_frame_time = Instant::now();
 
                 if let Some(ref mut enc) = self.encoder {
-                    enc.encode_frame(
+                    enc.encode_frame_at(
                         self.target_width as usize,
                         self.target_height as usize,
                         &self.rgb_buffer,
                         center_x,
                         center_y,
+                        &mut io::stdout(),
                     )?;
                 }
 
@@ -242,12 +252,11 @@ impl Player {
                     && let Some(ref enc) = self.encoder
                 {
                     let protocol_name = enc.protocol_name();
-                    let diffusion_name = enc.diffusion_name();
                     let status_row = enc.status_row(self.target_height);
-                    let mut lock = std::io::stdout().lock();
+                    let mut lock = io::stdout().lock();
                     write!(
                         lock,
-                        "\x1b[{};1H\x1b[1mFPS:{:.1} F:{} T:{:.1}s {}x{} C:{} P:{} d:{}\x1b[0m\r",
+                        "\x1b[{};1H\x1b[1mFPS:{:.1} F:{} T:{:.1}s {}x{} C:{} P:{}\x1b[0m\r",
                         status_row,
                         fps,
                         frame_count,
@@ -256,7 +265,6 @@ impl Player {
                         self.target_height,
                         self.colors,
                         protocol_name,
-                        diffusion_name,
                     )?;
                     lock.flush()?;
                 }

@@ -1,4 +1,4 @@
-use crate::sixel::{DiffusionMethod, Quality, parse_diffusion, parse_quality};
+use crate::config::{Config, parse_size};
 use clap::{
     Parser,
     builder::{Styles, styling::AnsiColor},
@@ -13,7 +13,7 @@ const STYLES: Styles = Styles::styled()
 #[derive(Debug, Parser)]
 #[command(version, about = "A terminal media player", long_about = None, styles = STYLES)]
 pub struct Cli {
-    /// Video/ Image file path
+    /// Video/Image file path (use - or omit for stdin pipe)
     pub path: Option<String>,
 
     /// Scale factor
@@ -23,14 +23,6 @@ pub struct Cli {
     /// Number of colors 2-256 (Sixel only)
     #[arg(short, long, default_value = "255")]
     pub colors: u8,
-
-    /// Dithering method: none, atkinson, fs, stucki, burkes, jajuni, auto (Sixel only)
-    #[arg(short, long, default_value = "auto", value_parser = parse_diffusion)]
-    pub diffusion: DiffusionMethod,
-
-    /// Quality level: low, high, full, auto (Sixel only)
-    #[arg(short, long, default_value = "auto", value_parser = parse_quality)]
-    pub quality: Quality,
 
     /// Force protocol: sixel, kitty, halfblock, braille, ascii, auto
     #[arg(short, long)]
@@ -51,30 +43,22 @@ pub struct Cli {
     /// Center the output on screen
     #[arg(short = 'C', long)]
     pub center: bool,
+
+    /// Diffusion method for sixel-rs (none, atkinson, fs, stucki, burkes, jajuni, auto)
+    #[cfg(feature = "sixel-rs")]
+    #[arg(long, default_value = "auto")]
+    pub diffusion: String,
+
+    /// Quality for sixel-rs (low, high, full, auto)
+    #[cfg(feature = "sixel-rs")]
+    #[arg(long, default_value = "auto")]
+    pub quality: String,
 }
 
 impl Cli {
     pub fn parse_args() -> Self {
         Self::parse()
     }
-}
-
-pub fn parse_size(s: &str) -> Option<(u32, u32)> {
-    let (w, h) = s.split_once('x')?;
-    Some((w.parse().ok()?, h.parse().ok()?))
-}
-
-pub struct Config {
-    pub path: String,
-    pub scale: f32,
-    pub colors: u8,
-    pub diffusion: DiffusionMethod,
-    pub quality: Quality,
-    pub force_protocol: Option<String>,
-    pub verbose: bool,
-    pub audio: bool,
-    pub size: Option<(u32, u32)>,
-    pub center: bool,
 }
 
 impl From<Cli> for Config {
@@ -92,13 +76,15 @@ impl From<Cli> for Config {
             path: cli.path.unwrap_or_default(),
             scale: cli.scale,
             colors,
-            diffusion: cli.diffusion,
-            quality: cli.quality,
             force_protocol: cli.protocol,
             verbose: cli.verbose,
             audio: cli.audio,
             size,
             center: cli.center,
+            #[cfg(feature = "sixel-rs")]
+            diffusion: cli.diffusion,
+            #[cfg(feature = "sixel-rs")]
+            quality: cli.quality,
         }
     }
 }

@@ -1,5 +1,5 @@
-use crate::args;
 use crate::audio;
+use crate::config;
 use crate::error::{Error, Result};
 use crate::player;
 use crate::protocol::ImageProtocol;
@@ -138,7 +138,7 @@ impl VideoDecoder {
     }
 }
 
-pub fn run(config: &args::Config, protocol: ImageProtocol) -> Result<()> {
+pub fn run(config: &config::Config, protocol: ImageProtocol) -> Result<()> {
     ffmpeg::init()?;
     ffmpeg::log::set_level(ffmpeg::log::Level::Error);
 
@@ -148,11 +148,46 @@ pub fn run(config: &args::Config, protocol: ImageProtocol) -> Result<()> {
         running_clone.store(false, Ordering::Release);
     })?;
 
-    let ictx = ffmpeg::format::input(&config.path)?;
+    let is_pipe = config.path == "-";
+
+    let ictx = if is_pipe {
+        let mut opts = ffmpeg::Dictionary::new();
+        opts.set("analyzeduration", "5000000");
+        opts.set("probesize", "5000000");
+        ffmpeg::format::input_with_dictionary("pipe:0", opts)?
+    } else {
+        ffmpeg::format::input(&config.path)?
+    };
+
     let video_stream = ictx
         .streams()
         .best(ffmpeg::media::Type::Video)
-        .ok_or(Error::NoVideoStream)?;
+        .or_else(|| {
+            ictx.streams().find(|s| {
+                matches!(
+                    s.parameters().id(),
+                    ffmpeg::codec::Id::H264
+                        | ffmpeg::codec::Id::HEVC
+                        | ffmpeg::codec::Id::H265
+                        | ffmpeg::codec::Id::VP8
+                        | ffmpeg::codec::Id::VP9
+                        | ffmpeg::codec::Id::AV1
+                        | ffmpeg::codec::Id::MPEG4
+                )
+            })
+        })
+        .ok_or_else(|| {
+            if is_pipe {
+                Error::Ffmpeg(
+                    "Cannot detect video stream from pipe. \
+                     The container format may not support this codec via pipe. \
+                     Try: yt-dlp -o - --remux-video mp4 <URL> | vt"
+                        .to_string(),
+                )
+            } else {
+                Error::NoVideoStream
+            }
+        })?;
     let video_stream_index = video_stream.index();
 
     let decoder = VideoDecoder::new(&video_stream)?;
@@ -224,11 +259,13 @@ pub fn run(config: &args::Config, protocol: ImageProtocol) -> Result<()> {
             target_height,
             protocol,
             colors: config.colors,
-            diffusion: config.diffusion,
-            quality: config.quality,
             verbose: config.verbose,
             preview_mode,
             center: config.center,
+            #[cfg(feature = "sixel-rs")]
+            diffusion: config.diffusion.clone(),
+            #[cfg(feature = "sixel-rs")]
+            quality: config.quality.clone(),
         },
     )?;
 

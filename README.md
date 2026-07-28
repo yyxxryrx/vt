@@ -1,4 +1,4 @@
-# vt - visual terminal(开发中...)
+# vt - visual terminal
 
 **用 Rust 打造的终端媒体播放器，让你在命令行里看视频！**
 
@@ -12,6 +12,26 @@
 - **丰富色彩** - Sixel 模式支持 2-256 色和多种抖动算法
 - **自由缩放** - 通过 --scale 调整视频尺寸
 - **状态显示** - verbose 模式实时显示 FPS 和帧数
+- **ratatui中图片渲染** - 参考examples使用
+
+**注意sixel解码器有两种实现，`pure rust` or `sixel-rs`**
+
+## cli构建
+```bash
+cargo build -r --features sixel-rs # 依赖sixel-rs
+
+#or
+
+cargo build -r # rust实现
+
+```
+
+## ratatui 使用
+```bash
+ cargo run --example ratatui --features ratatui -- /path/to/image
+```
+
+
 
 ## 安装
 

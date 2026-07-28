@@ -1,4 +1,4 @@
-use crate::args;
+use crate::config;
 use crate::encoder::Encoder;
 use crate::error::Result;
 use crate::protocol::ImageProtocol;
@@ -50,7 +50,7 @@ pub fn is_image_extension(path: &str) -> bool {
     )
 }
 
-pub fn run(config: &args::Config, protocol: ImageProtocol) -> Result<()> {
+pub fn run(config: &config::Config, protocol: ImageProtocol) -> Result<()> {
     let (img, orig_w, orig_h) = load_image(&config.path)?;
     let (tw, th) = fit_dimensions(orig_w, orig_h, config.scale, config.size, protocol);
 
@@ -64,8 +64,15 @@ pub fn run(config: &args::Config, protocol: ImageProtocol) -> Result<()> {
     clear_screen(&mut stdout_lock)?;
     hide_cursor(&mut stdout_lock)?;
 
-    let mut enc = Encoder::new(protocol, config.colors, config.diffusion, config.quality)?;
-    enc.encode_frame(tw as usize, th as usize, &rgb_data, cx, cy)?;
+    let mut enc = Encoder::new(protocol, config.colors)?;
+    enc.encode_frame_at(
+        tw as usize,
+        th as usize,
+        &rgb_data,
+        cx,
+        cy,
+        &mut std::io::stdout(),
+    )?;
 
     Ok(())
 }

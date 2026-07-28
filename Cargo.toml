@@ -4,22 +4,45 @@ version = "0.1.0"
 edition = "2024"
 description = "A terminal media player written in Rust."
 
+[lib]
+name = "vt"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vt"
+path = "src/main.rs"
+
 [dependencies]
-base64 = "0.22.1"
+base64 = "0.23.0"
 clap = { version = "4.6.1", features = ["derive"] }
 ctrlc = "3.5.2"
 ffmpeg-next = "8.1.0"
 image = "0.25.10"
-libc = "0.2.186"
+libc = "0.2.189"
 rodio = {
   version = "0.22.2",
   default-features = false,
-  features = ["flac", "mp3", "mp4", "playback", "vorbis", "wav"]
+  features = ["mp4", "playback"]
 }
-
-sixel-rs = "0.5.0"
 terminal_size = "0.4.4"
 thiserror = "2.0.19"
+
+[dependencies.ratatui]
+version = "0.30.2"
+optional = true
+
+[dependencies.sixel-rs]
+version = "0.5.0"
+optional = true
+
+[dev-dependencies]
+crossterm = "0.29.0"
+ratatui = "0.30.2"
+
+[features]
+default = []
+ratatui = ["dep:ratatui"]
+sixel-rs = ["dep:sixel-rs"]
 
 [profile.release]
 opt-level = 3

@@ -3,12 +3,18 @@ use std::io::{self, Write as IoWrite};
 
 pub struct BrailleEncoder;
 
+impl Default for BrailleEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BrailleEncoder {
     pub fn new() -> Self {
         Self
     }
 
-    pub fn encode_frame<W: IoWrite>(
+    pub fn encode_frame<W: IoWrite + ?Sized>(
         &mut self,
         writer: &mut W,
         width: usize,

@@ -5,12 +5,18 @@ const RAMP: &[u8] = b" .:-=+*#%@";
 
 pub struct AsciiEncoder;
 
+impl Default for AsciiEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AsciiEncoder {
     pub fn new() -> Self {
         Self
     }
 
-    pub fn encode_frame<W: IoWrite>(
+    pub fn encode_frame<W: IoWrite + ?Sized>(
         &mut self,
         writer: &mut W,
         width: usize,

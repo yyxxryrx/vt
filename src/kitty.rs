@@ -7,6 +7,12 @@ pub struct KittyEncoder {
     b64_buffer: Vec<u8>,
 }
 
+impl Default for KittyEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KittyEncoder {
     pub fn new() -> Self {
         Self {
@@ -15,7 +21,7 @@ impl KittyEncoder {
         }
     }
 
-    pub fn encode_frame<W: Write>(
+    pub fn encode_frame<W: Write + ?Sized>(
         &mut self,
         writer: &mut W,
         width: usize,

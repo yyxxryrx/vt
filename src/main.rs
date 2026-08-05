@@ -1,7 +1,8 @@
 use vt::{args, config, image, protocol, video};
 
 fn is_stdin_piped() -> bool {
-    unsafe { libc::isatty(libc::STDIN_FILENO) == 0 }
+    use std::io::IsTerminal;
+    !std::io::stdin().is_terminal()
 }
 
 fn main() -> vt::Result<()> {
